@@ -1,0 +1,39 @@
+# Source files (included via package.json "files" field)
+# src/
+
+# Tests
+test/
+__tests__/
+__mocks__/
+
+# Examples
+examples/
+
+# Documentation
+*.md
+!README.md
+
+# Configuration files
+.gitignore
+.npmignore
+.eslintrc*
+.prettierrc*
+.babelrc*
+rollup.config.js
+jest.config.js
+
+# Logs and temporary files
+logs/
+*.log
+tmp/
+temp/
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db

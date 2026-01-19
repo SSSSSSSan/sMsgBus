@@ -1,0 +1,59 @@
+{
+  "name": "@san/smsgbus",
+  "version": "1.0.0",
+  "description": "一个轻量级的消息总线库，支持广播和单播通信模式",
+  "main": "dist/smsgbus.cjs.js",
+  "browser": "dist/smsgbus.umd.js",
+  "module": "dist/smsgbus.esm.js",
+  "exports": {
+    ".": {
+      "import": "./dist/smsgbus.esm.js",
+      "require": "./dist/smsgbus.cjs.js",
+      "default": "./dist/smsgbus.umd.js"
+    }
+  },
+  "sideEffects": false,
+  "files": [
+    "src",
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "node build.js",
+    "dev": "rollup -c rollup.config.mjs -w",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "message-bus",
+    "event-bus",
+    "pubsub",
+    "event-emitter",
+    "messaging"
+  ],
+  "author": "SSSSSSSan",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/SSSSSSSan/smsgbus.git"
+  },
+  "bugs": {
+    "url": "https://github.com/SSSSSSSan/smsgbuss/issues"
+  },
+  "homepage": "https://github.com/SSSSSSSan/smsgbus#readme",
+  "engines": {
+    "node": ">=10.0.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "devDependencies": {
+    "@babel/preset-env": "^7.28.6",
+    "@rollup/plugin-terser": "^0.4.4",
+    "jest": "^30.2.0",
+    "rollup": "^4.55.1"
+  }
+}
