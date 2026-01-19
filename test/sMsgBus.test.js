@@ -8,7 +8,7 @@ describe('sMsgBus 功能测试', () => {
     // 由于是单例模式，我们需要清除实例
     if (sMsgBus.instance) {
       sMsgBus.instance._listeners.clear();
-      sMsgBus.instance._triggers.clear();
+      sMsgBus.instance._calls.clear();
     }
     bus = new sMsgBus();
   });
@@ -24,29 +24,32 @@ describe('sMsgBus 功能测试', () => {
 
     test('应该具有内部 Map 属性', () => {
       expect(bus._listeners).toBeInstanceOf(Map);
-      expect(bus._triggers).toBeInstanceOf(Map);
+      expect(bus._calls).toBeInstanceOf(Map);
     });
   });
 
   describe('广播事件功能测试', () => {
-    test('listen 应该正确订阅事件', () => {
+    test('on 应该正确订阅事件', () => {
       const callback = jest.fn();
-      bus.listen('test.event', callback);
+      bus.on('test.event', callback);
       
       expect(bus._listeners.has('test.event')).toBe(true);
-      expect(bus._listeners.get('test.event')).toContain(callback);
+      const listeners = bus._listeners.get('test.event');
+      expect(listeners).toHaveLength(1);
+      expect(listeners[0].callback).toBe(callback);
+      expect(listeners[0].thisArg).toBe(null);
     });
 
-    test('listen 应该支持链式调用', () => {
+    test('on 应该支持链式调用', () => {
       const callback = jest.fn();
-      const result = bus.listen('test.event', callback);
+      const result = bus.on('test.event', callback);
       
       expect(result).toBe(bus);
     });
 
-    test('listen 应该验证参数类型', () => {
-      expect(() => bus.listen('', jest.fn())).toThrow('事件类型必须是非空字符串');
-      expect(() => bus.listen('test', null)).toThrow('回调函数必须是函数类型');
+    test('on 应该验证参数类型', () => {
+      expect(() => bus.on('', jest.fn())).toThrow('事件类型必须是非空字符串');
+      expect(() => bus.on('test', null)).toThrow('回调函数必须是函数类型');
     });
 
     test('emit 应该触发所有监听器', () => {
@@ -54,8 +57,8 @@ describe('sMsgBus 功能测试', () => {
       const callback2 = jest.fn();
       const testData = { message: 'test' };
       
-      bus.listen('test.event', callback1);
-      bus.listen('test.event', callback2);
+      bus.on('test.event', callback1);
+      bus.on('test.event', callback2);
       bus.emit('test.event', testData);
       
       expect(callback1).toHaveBeenCalledWith(testData);
@@ -64,7 +67,7 @@ describe('sMsgBus 功能测试', () => {
 
     test('emit 应该支持链式调用', () => {
       const callback = jest.fn();
-      bus.listen('test.event', callback);
+      bus.on('test.event', callback);
       const result = bus.emit('test.event', {});
       
       expect(result).toBe(bus);
@@ -74,121 +77,230 @@ describe('sMsgBus 功能测试', () => {
       expect(() => bus.emit('nonexistent.event', {})).not.toThrow();
     });
 
-    test('removeListening 应该移除特定监听器', () => {
+    test('off 应该移除特定监听器', () => {
       const callback1 = jest.fn();
       const callback2 = jest.fn();
       
-      bus.listen('test.event', callback1);
-      bus.listen('test.event', callback2);
-      bus.removeListening('test.event', callback1);
+      bus.on('test.event', callback1);
+      bus.on('test.event', callback2);
+      bus.off('test.event', callback1);
       
-      expect(bus._listeners.get('test.event')).not.toContain(callback1);
-      expect(bus._listeners.get('test.event')).toContain(callback2);
+      const listeners = bus._listeners.get('test.event');
+      expect(listeners).toHaveLength(1);
+      expect(listeners[0].callback).toBe(callback2);
     });
 
-    test('removeListening 应该支持链式调用', () => {
+    test('off 应该支持链式调用', () => {
       const callback = jest.fn();
-      bus.listen('test.event', callback);
-      const result = bus.removeListening('test.event', callback);
+      bus.on('test.event', callback);
+      const result = bus.off('test.event', callback);
       
       expect(result).toBe(bus);
     });
 
-    test('_removeAllListening 应该清除所有广播监听器', () => {
+    test('_clearOn 应该清除所有广播监听器', () => {
       const callback1 = jest.fn();
       const callback2 = jest.fn();
       
-      bus.listen('event1', callback1);
-      bus.listen('event2', callback2);
-      bus._removeAllListening();
+      bus.on('event1', callback1);
+      bus.on('event2', callback2);
+      bus._clearOn();
       
       expect(bus._listeners.size).toBe(0);
     });
   });
 
-  describe('单播事件功能测试', () => {
-    test('register 应该正确注册单播事件', () => {
+  describe('调用事件功能测试', () => {
+    test('onCall 应该正确注册调用事件', () => {
       const callback = jest.fn();
-      bus.register('test.trigger', callback);
+      bus.onCall('test.call', callback);
       
-      expect(bus._triggers.get('test.trigger')).toBe(callback);
+      const callInfo = bus._calls.get('test.call');
+      expect(callInfo).toBeDefined();
+      expect(callInfo.callback).toBe(callback);
+      expect(callInfo.thisArg).toBe(null);
     });
 
-    test('register 应该支持链式调用', () => {
+    test('onCall 应该支持链式调用', () => {
       const callback = jest.fn();
-      const result = bus.register('test.trigger', callback);
+      const result = bus.onCall('test.call', callback);
       
       expect(result).toBe(bus);
     });
 
-    test('register 应该验证参数类型', () => {
-      expect(() => bus.register('', jest.fn())).toThrow('事件类型必须是非空字符串');
-      expect(() => bus.register('test', null)).toThrow('回调函数必须是函数类型');
+    test('onCall 应该验证参数类型', () => {
+      expect(() => bus.onCall('', jest.fn())).toThrow('事件类型必须是非空字符串');
+      expect(() => bus.onCall('test', null)).toThrow('回调函数必须是函数类型');
     });
 
-    test('trigger 应该异步触发单播事件', (done) => {
+    test('onCall 重复注册应该警告但保持链式调用', () => {
+      const consoleSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+      const callback1 = jest.fn();
+      const callback2 = jest.fn();
+      
+      // 第一次注册
+      const result1 = bus.onCall('test.call', callback1);
+      const callInfo1 = bus._calls.get('test.call');
+      expect(callInfo1.callback).toBe(callback1);
+      expect(result1).toBe(bus);
+      
+      // 第二次注册（重复）
+      const result2 = bus.onCall('test.call', callback2);
+      // 应该警告但返回this保持链式调用
+      expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('调用事件 test.call 已注册，跳过重复注册'));
+      // 回调函数应该仍然是第一个
+      const callInfo2 = bus._calls.get('test.call');
+      expect(callInfo2.callback).toBe(callback1);
+      expect(result2).toBe(bus);
+      
+      consoleSpy.mockRestore();
+    });
+
+    test('call 应该异步触发调用事件并返回Promise', (done) => {
       const callback = jest.fn(() => {
         expect(callback).toHaveBeenCalledWith({ data: 'test' });
-        done();
+        return 'result';
       });
       
-      bus.register('test.trigger', callback);
-      bus.trigger('test.trigger', { data: 'test' });
+      bus.onCall('test.call', callback);
+      bus.call('test.call', { data: 'test' }).then(result => {
+        expect(result).toBe('result');
+        done();
+      });
     });
 
-    test('trigger 应该支持链式调用', () => {
-      const callback = jest.fn();
-      bus.register('test.trigger', callback);
-      const result = bus.trigger('test.trigger', {});
-      
-      expect(result).toBe(bus);
-    });
-
-    test('trigger 应该处理未注册的事件', () => {
-      expect(() => bus.trigger('nonexistent.trigger', {})).not.toThrow();
-    });
-
-    test('triggerSync 应该同步触发单播事件并返回值', () => {
+    test('call 应该返回Promise', () => {
       const callback = jest.fn(() => 'result');
-      bus.register('test.trigger', callback);
+      bus.onCall('test.call', callback);
+      const result = bus.call('test.call', {});
       
-      const result = bus.triggerSync('test.trigger', { data: 'test' });
+      expect(result).toBeInstanceOf(Promise);
+      return result.then(value => {
+        expect(value).toBe('result');
+      });
+    });
+
+    test('call 应该处理未注册的事件并返回已解析的Promise', () => {
+      const promise = bus.call('nonexistent.call', {});
+      
+      expect(promise).toBeInstanceOf(Promise);
+      return promise.then(value => {
+        expect(value).toBeUndefined();
+      });
+    });
+
+    test('callSync 应该同步触发调用事件并返回值', () => {
+      const callback = jest.fn(() => 'result');
+      bus.onCall('test.call', callback);
+      
+      const result = bus.callSync('test.call', { data: 'test' });
       
       expect(result).toBe('result');
       expect(callback).toHaveBeenCalledWith({ data: 'test' });
     });
 
-    test('triggerSync 应该返回 undefined 当事件未注册时', () => {
-      const result = bus.triggerSync('nonexistent.trigger', {});
+    test('callSync 应该返回 undefined 当事件未注册时', () => {
+      const result = bus.callSync('nonexistent.call', {});
       
       expect(result).toBeUndefined();
     });
 
-    test('removeTrigger 应该移除单播事件', () => {
+    test('offCall 应该移除调用事件', () => {
       const callback = jest.fn();
-      bus.register('test.trigger', callback);
-      bus.removeTrigger('test.trigger', callback);
+      bus.onCall('test.call', callback);
+      bus.offCall('test.call', callback);
       
-      expect(bus._triggers.has('test.trigger')).toBe(false);
+      expect(bus._calls.has('test.call')).toBe(false);
     });
 
-    test('removeTrigger 应该支持链式调用', () => {
+    test('offCall 应该支持链式调用', () => {
       const callback = jest.fn();
-      bus.register('test.trigger', callback);
-      const result = bus.removeTrigger('test.trigger', callback);
+      bus.onCall('test.call', callback);
+      const result = bus.offCall('test.call', callback);
       
       expect(result).toBe(bus);
     });
 
-    test('_removeAllTrigger 应该清除所有单播触发器', () => {
+    test('_clearCall 应该清除所有调用事件', () => {
       const callback1 = jest.fn();
       const callback2 = jest.fn();
       
-      bus.register('trigger1', callback1);
-      bus.register('trigger2', callback2);
-      bus._removeAllTrigger();
+      bus.onCall('call1', callback1);
+      bus.onCall('call2', callback2);
+      bus._clearCall();
       
-      expect(bus._triggers.size).toBe(0);
+      expect(bus._calls.size).toBe(0);
+    });
+
+    test('check 应该正确返回事件注册状态', () => {
+      // 初始状态
+      expect(bus.check('test.event')).toEqual({ on: 0, call: false });
+      
+      // 注册广播事件
+      const callback1 = jest.fn();
+      bus.on('test.event', callback1);
+      expect(bus.check('test.event')).toEqual({ on: 1, call: false });
+      
+      // 添加第二个广播监听器
+      const callback2 = jest.fn();
+      bus.on('test.event', callback2);
+      expect(bus.check('test.event')).toEqual({ on: 2, call: false });
+      
+      // 注册调用事件
+      const callCallback = jest.fn();
+      bus.onCall('test.call', callCallback);
+      expect(bus.check('test.call')).toEqual({ on: 0, call: true });
+      
+      // 移除广播监听器
+      bus.off('test.event', callback1);
+      expect(bus.check('test.event')).toEqual({ on: 1, call: false });
+      
+      // 移除调用事件
+      bus.offCall('test.call', callCallback);
+      expect(bus.check('test.call')).toEqual({ on: 0, call: false });
+    });
+
+    test('check 应该验证参数类型', () => {
+      expect(() => bus.check('')).toThrow('事件类型必须是非空字符串');
+    });
+
+    test('on 应该支持thisArg参数', () => {
+      const context = { name: 'testContext' };
+      const callback = jest.fn(function() {
+        expect(this).toBe(context);
+      });
+      
+      bus.on('test.event', callback, context);
+      bus.emit('test.event', { data: 'test' });
+      
+      expect(callback).toHaveBeenCalledTimes(1);
+    });
+
+    test('onCall 应该支持thisArg参数', () => {
+      const context = { name: 'testContext' };
+      const callback = jest.fn(function() {
+        expect(this).toBe(context);
+        return 'result';
+      });
+      
+      bus.onCall('test.call', callback, context);
+      const result = bus.callSync('test.call', { data: 'test' });
+      
+      expect(result).toBe('result');
+      expect(callback).toHaveBeenCalledTimes(1);
+    });
+
+    test('onCall 应该支持thisArg参数并返回Promise', () => {
+      const context = { name: 'testContext' };
+      const callback = jest.fn(function() {
+        expect(this).toBe(context);
+        return Promise.resolve('async result');
+      });
+      
+      bus.onCall('test.call', callback, context);
+      return bus.call('test.call', { data: 'test' }).then(result => {
+        expect(result).toBe('async result');
+      });
     });
   });
 
@@ -199,35 +311,55 @@ describe('sMsgBus 功能测试', () => {
         throw new Error('Test error');
       });
       
-      bus.listen('test.event', errorCallback);
+      bus.on('test.event', errorCallback);
       expect(() => bus.emit('test.event', {})).not.toThrow();
       
       consoleSpy.mockRestore();
     });
 
-    test('trigger 应该处理异步回调中的错误', (done) => {
+    test('call 应该处理异步回调中的错误并返回rejected Promise', () => {
       const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
       const errorCallback = jest.fn(() => {
         throw new Error('Test error');
       });
       
-      bus.register('test.trigger', errorCallback);
-      bus.trigger('test.trigger', {});
+      bus.onCall('test.call', errorCallback);
+      const promise = bus.call('test.call', {});
       
-      setTimeout(() => {
+      expect(promise).toBeInstanceOf(Promise);
+      return promise.catch(error => {
+        expect(error).toBeInstanceOf(Error);
+        expect(error.message).toBe('Test error');
         expect(consoleSpy).toHaveBeenCalled();
         consoleSpy.mockRestore();
-        done();
-      }, 10);
+      });
     });
 
-    test('triggerSync 应该抛出回调中的错误', () => {
+    test('call 应该处理异步Promise回调中的错误', () => {
+      const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+      const errorCallback = jest.fn(() => {
+        return Promise.reject(new Error('Async error'));
+      });
+      
+      bus.onCall('test.call', errorCallback);
+      const promise = bus.call('test.call', {});
+      
+      expect(promise).toBeInstanceOf(Promise);
+      return promise.catch(error => {
+        expect(error).toBeInstanceOf(Error);
+        expect(error.message).toBe('Async error');
+        expect(consoleSpy).toHaveBeenCalled();
+        consoleSpy.mockRestore();
+      });
+    });
+
+    test('callSync 应该抛出回调中的错误', () => {
       const errorCallback = jest.fn(() => {
         throw new Error('Test error');
       });
       
-      bus.register('test.trigger', errorCallback);
-      expect(() => bus.triggerSync('test.trigger', {})).toThrow('Test error');
+      bus.onCall('test.call', errorCallback);
+      expect(() => bus.callSync('test.call', {})).toThrow('Test error');
     });
   });
 });
@@ -238,7 +370,7 @@ describe('sMsgBus 压力测试', () => {
   beforeEach(() => {
     if (sMsgBus.instance) {
       sMsgBus.instance._listeners.clear();
-      sMsgBus.instance._triggers.clear();
+      sMsgBus.instance._calls.clear();
     }
     bus = new sMsgBus();
   });
@@ -248,7 +380,7 @@ describe('sMsgBus 压力测试', () => {
     const eventCount = 10000;
     
     // 订阅事件
-    bus.listen('pressure.broadcast', callback);
+    bus.on('pressure.broadcast', callback);
     
     // 记录开始时间
     const startTime = Date.now();
@@ -272,56 +404,59 @@ describe('sMsgBus 压力测试', () => {
     expect(duration).toBeLessThan(5000); // 5秒内完成
   });
 
-  test('单播消息压力测试 - 1万条消息', (done) => {
+  test('调用消息压力测试 - 1万条消息', (done) => {
     let callbackCount = 0;
     const eventCount = 10000;
+    const promises = [];
     
-    // 注册单播事件
-    bus.register('pressure.unicast', (data) => {
+    // 注册调用事件
+    bus.onCall('pressure.call', (data) => {
       callbackCount++;
-      
-      // 当所有回调都完成后
-      if (callbackCount === eventCount) {
-        // 记录结束时间
-        const endTime = Date.now();
-        const duration = endTime - startTime;
-        
-        // 验证回调被调用了1万次
-        expect(callbackCount).toBe(eventCount);
-        
-        // 输出性能信息
-        console.log(`单播压力测试: ${eventCount}条消息，耗时${duration}ms，平均${(duration/eventCount).toFixed(3)}ms/条`);
-        
-        // 性能断言：1万条消息应该在合理时间内完成
-        expect(duration).toBeLessThan(10000); // 10秒内完成（异步需要更多时间）
-        done();
-      }
+      return `result-${data.index}`;
     });
     
     // 记录开始时间
     const startTime = Date.now();
     
-    // 发送1万条单播消息
+    // 发送1万条调用消息并收集Promise
     for (let i = 0; i < eventCount; i++) {
-      bus.trigger('pressure.unicast', { index: i, timestamp: Date.now() });
+      promises.push(bus.call('pressure.call', { index: i, timestamp: Date.now() }));
     }
+    
+    // 等待所有Promise完成
+    Promise.all(promises).then(results => {
+      // 记录结束时间
+      const endTime = Date.now();
+      const duration = endTime - startTime;
+      
+      // 验证所有Promise都解析了
+      expect(results.length).toBe(eventCount);
+      expect(callbackCount).toBe(eventCount);
+      
+      // 输出性能信息
+      console.log(`调用压力测试: ${eventCount}条消息，耗时${duration}ms，平均${(duration/eventCount).toFixed(3)}ms/条`);
+      
+      // 性能断言：1万条消息应该在合理时间内完成
+      expect(duration).toBeLessThan(10000); // 10秒内完成（异步需要更多时间）
+      done();
+    });
   });
 
-  test('混合消息压力测试 - 5000广播 + 5000单播', (done) => {
+  test('混合消息压力测试 - 5000广播 + 5000调用', (done) => {
     let broadcastCount = 0;
-    let unicastCount = 0;
+    let callCount = 0;
     const eventCount = 5000;
     const totalEvents = eventCount * 2;
     
     // 订阅广播事件
-    bus.listen('pressure.mixed.broadcast', () => {
+    bus.on('pressure.mixed.broadcast', () => {
       broadcastCount++;
       checkCompletion();
     });
     
-    // 注册单播事件
-    bus.register('pressure.mixed.unicast', () => {
-      unicastCount++;
+    // 注册调用事件
+    bus.onCall('pressure.mixed.call', () => {
+      callCount++;
       checkCompletion();
     });
     
@@ -331,20 +466,20 @@ describe('sMsgBus 压力测试', () => {
     // 发送混合消息
     for (let i = 0; i < eventCount; i++) {
       bus.emit('pressure.mixed.broadcast', { index: i });
-      bus.trigger('pressure.mixed.unicast', { index: i });
+      bus.call('pressure.mixed.call', { index: i });
     }
     
     function checkCompletion() {
-      if (broadcastCount + unicastCount === totalEvents) {
+      if (broadcastCount + callCount === totalEvents) {
         const endTime = Date.now();
         const duration = endTime - startTime;
         
         // 验证回调次数
         expect(broadcastCount).toBe(eventCount);
-        expect(unicastCount).toBe(eventCount);
+        expect(callCount).toBe(eventCount);
         
         // 输出性能信息
-        console.log(`混合压力测试: ${totalEvents}条消息（${eventCount}广播 + ${eventCount}单播），耗时${duration}ms，平均${(duration/totalEvents).toFixed(3)}ms/条`);
+        console.log(`混合压力测试: ${totalEvents}条消息（${eventCount}广播 + ${eventCount}调用），耗时${duration}ms，平均${(duration/totalEvents).toFixed(3)}ms/条`);
         
         // 性能断言
         expect(duration).toBeLessThan(8000); // 8秒内完成
@@ -361,7 +496,7 @@ describe('sMsgBus 压力测试', () => {
     for (let i = 0; i < listenerCount; i++) {
       const callback = jest.fn();
       callbacks.push(callback);
-      bus.listen(`event.${i}`, callback);
+      bus.on(`event.${i}`, callback);
     }
     
     // 验证监听器数量
@@ -379,7 +514,7 @@ describe('sMsgBus 压力测试', () => {
     
     // 清理监听器
     for (let i = 0; i < listenerCount; i++) {
-      bus.removeListening(`event.${i}`, callbacks[i]);
+      bus.off(`event.${i}`, callbacks[i]);
     }
     
     // 验证清理后没有监听器

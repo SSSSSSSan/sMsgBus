@@ -14,11 +14,11 @@ class sMsgBus {
 
     _init() {
         this._listeners = new Map();
-        this._triggers = new Map();
+        this._calls = new Map();
     }   
 
     // 订阅广播事件
-    listen(type, callback) {
+    on(type, callback, thisArg = null) {
         if (typeof type !== 'string' || type.trim() === '') {
             throw new Error('事件类型必须是非空字符串');
         }
@@ -29,7 +29,7 @@ class sMsgBus {
         if (!this._listeners.has(type)) {
             this._listeners.set(type, []);
         }
-        this._listeners.get(type).push(callback);
+        this._listeners.get(type).push({ callback, thisArg });
         return this;
     }
     // 发布广播事件
@@ -38,14 +38,14 @@ class sMsgBus {
             throw new Error('事件类型必须是非空字符串');
         }
 
-        const callbacks = this._listeners.get(type);
-        if (!callbacks || callbacks.length === 0) {
+        const listeners = this._listeners.get(type);
+        if (!listeners || listeners.length === 0) {
             return this;
         }
 
-        callbacks.forEach(callback => {
+        listeners.forEach(({ callback, thisArg }) => {
             try {
-                callback(data);
+                callback.call(thisArg, data);
             } catch (error) {
                 console.error(`执行广播事件 ${type} 的回调时出错:`, error);
             }
@@ -55,7 +55,7 @@ class sMsgBus {
     }
 
     // 移除广播事件
-    removeListening(type, callback) {
+    off(type, callback, thisArg = null) {
         if (typeof type !== 'string' || type.trim() === '') {
             throw new Error('事件类型必须是非空字符串');
         }
@@ -63,29 +63,33 @@ class sMsgBus {
             throw new Error('回调函数必须是函数类型');
         }
 
-        const callbacks = this._listeners.get(type);
-        if (!callbacks) {
+        const listeners = this._listeners.get(type);
+        if (!listeners) {
             return this;
         }
 
-        const filteredCallbacks = callbacks.filter(cb => cb !== callback);
-        if (filteredCallbacks.length === 0) {
+        // 过滤掉匹配callback和thisArg的监听器
+        const filteredListeners = listeners.filter(
+            ({ callback: cb, thisArg: ta }) => !(cb === callback && ta === thisArg)
+        );
+        
+        if (filteredListeners.length === 0) {
             this._listeners.delete(type);
         } else {
-            this._listeners.set(type, filteredCallbacks);
+            this._listeners.set(type, filteredListeners);
         }
 
         return this;
     }
 
     // 移除所有广播事件
-    _removeAllListening() {
+    _clearOn() {
         this._listeners.clear();
         return this;
     }
 
-    // 注册单播事件
-    register(type, callback) {
+    // 注册调用事件
+    onCall(type, callback, thisArg = null) {
         if (typeof type !== 'string' || type.trim() === '') {
             throw new Error('事件类型必须是非空字符串');
         }
@@ -93,51 +97,73 @@ class sMsgBus {
             throw new Error('回调函数必须是函数类型');
         }
 
-        this._triggers.set(type, callback);
+        // 检查是否已注册，避免覆盖
+        if (this._calls.has(type)) {
+            console.warn(`调用事件 ${type} 已注册，跳过重复注册`);
+            return this; // 返回this保持链式调用
+        }
+
+        this._calls.set(type, { callback, thisArg });
         return this;
     }
-    // 触发单播事件（异步，无返回）
-    trigger(type, data) {
+    // 调用事件（异步，返回Promise）
+    call(type, data) {
         if (typeof type !== 'string' || type.trim() === '') {
             throw new Error('事件类型必须是非空字符串');
         }
 
-        const callback = this._triggers.get(type);
-        if (!callback) {
-            return this;
+        const callInfo = this._calls.get(type);
+        if (!callInfo) {
+            // 如果事件未注册，返回一个立即解析的Promise
+            return Promise.resolve(undefined);
         }
 
-        // 异步执行
-        setTimeout(() => {
-            try {
-                callback(data);
-            } catch (error) {
-                console.error(`执行单播事件 ${type} 的回调时出错:`, error);
-            }
-        }, 0);
+        const { callback, thisArg } = callInfo;
 
-        return this;
+        // 返回Promise以支持异步结果
+        return new Promise((resolve, reject) => {
+            // 使用setTimeout确保异步执行
+            setTimeout(() => {
+                try {
+                    const result = callback.call(thisArg, data);
+                    // 如果回调返回Promise，等待它
+                    if (result && typeof result.then === 'function') {
+                        result.then(resolve).catch(error => {
+                            console.error(`执行调用事件 ${type} 的回调时出错:`, error);
+                            reject(error);
+                        });
+                    } else {
+                        resolve(result);
+                    }
+                } catch (error) {
+                    console.error(`执行调用事件 ${type} 的回调时出错:`, error);
+                    reject(error);
+                }
+            }, 0);
+        });
     }
-    // 触发单播事件（同步，有返回）
-    triggerSync(type, data) {
+    // 调用事件（同步，有返回）
+    callSync(type, data) {
         if (typeof type !== 'string' || type.trim() === '') {
             throw new Error('事件类型必须是非空字符串');
         }
 
-        const callback = this._triggers.get(type);
-        if (!callback) {
+        const callInfo = this._calls.get(type);
+        if (!callInfo) {
             return undefined;
         }
 
+        const { callback, thisArg } = callInfo;
+
         try {
-            return callback(data);
+            return callback.call(thisArg, data);
         } catch (error) {
-            console.error(`执行单播事件 ${type} 的回调时出错:`, error);
+            console.error(`执行调用事件 ${type} 的回调时出错:`, error);
             throw error;
         }
     }
-    // 移除单播事件
-    removeTrigger(type, callback) {
+    // 移除调用事件
+    offCall(type, callback, thisArg = null) {
         if (typeof type !== 'string' || type.trim() === '') {
             throw new Error('事件类型必须是非空字符串');
         }
@@ -146,22 +172,38 @@ class sMsgBus {
             throw new Error('回调函数必须是函数类型');
         }
 
-        const registeredCallback = this._triggers.get(type);
-        if (!registeredCallback) {
+        const callInfo = this._calls.get(type);
+        if (!callInfo) {
             return this;
         }
 
+        const { callback: registeredCallback, thisArg: registeredThisArg } = callInfo;
+
         // 如果没有指定 callback 或者指定的 callback 与注册的一致，则删除
-        if (!callback || registeredCallback === callback) {
-            this._triggers.delete(type);
+        // 同时检查thisArg是否匹配
+        if (!callback || (registeredCallback === callback && registeredThisArg === thisArg)) {
+            this._calls.delete(type);
         }
 
         return this;
     }
-    // 移除所有单播事件
-    _removeAllTrigger() {
-        this._triggers.clear();
+    // 移除所有调用事件
+    _clearCall() {
+        this._calls.clear();
         return this;
+    }
+
+    // 检查事件类型是否被注册
+    check(type) {
+        if (typeof type !== 'string' || type.trim() === '') {
+            throw new Error('事件类型必须是非空字符串');
+        }
+
+        const listeners = this._listeners.get(type);
+        return {
+            on: listeners ? listeners.length : 0,  // 返回监听者数量，0表示没有监听者
+            call: this._calls.has(type)  // 返回布尔值，是否已注册调用事件
+        };
     }
 
 }
