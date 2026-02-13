@@ -2,20 +2,20 @@
  * 一个提供广播处理
  * 定向访问的类
  */
-
 class sMsgBus {
     constructor() {
         if (sMsgBus.instance) return sMsgBus.instance;
         sMsgBus.instance = this;
 
         this._init();
+        this._moduleLoaderInit();
         return this;
     }
 
     _init() {
         this._listeners = new Map();
         this._calls = new Map();
-    }   
+    }
 
     // 订阅广播事件
     on(type, callback, thisArg = null) {
@@ -72,7 +72,7 @@ class sMsgBus {
         const filteredListeners = listeners.filter(
             ({ callback: cb, thisArg: ta }) => !(cb === callback && ta === thisArg)
         );
-        
+
         if (filteredListeners.length === 0) {
             this._listeners.delete(type);
         } else {
@@ -107,7 +107,7 @@ class sMsgBus {
         return this;
     }
     // 调用事件（异步，返回Promise）
-    call(type, data) {
+    call(type, ...args) {
         if (typeof type !== 'string' || type.trim() === '') {
             throw new Error('事件类型必须是非空字符串');
         }
@@ -125,8 +125,8 @@ class sMsgBus {
             // 使用setTimeout确保异步执行
             setTimeout(() => {
                 try {
-                    const result = callback.call(thisArg, data);
-                    // 如果回调返回Promise，等待它
+                    const result = callback.call(thisArg, ...args);
+                    // 如果回调返回Promise，等待它...
                     if (result && typeof result.then === 'function') {
                         result.then(resolve).catch(error => {
                             console.error(`执行调用事件 ${type} 的回调时出错:`, error);
@@ -143,7 +143,8 @@ class sMsgBus {
         });
     }
     // 调用事件（同步，有返回）
-    callSync(type, data) {
+    callSync(type, ...args) {
+        // console.log(`type: ${type}, args: ${args}`)
         if (typeof type !== 'string' || type.trim() === '') {
             throw new Error('事件类型必须是非空字符串');
         }
@@ -156,7 +157,7 @@ class sMsgBus {
         const { callback, thisArg } = callInfo;
 
         try {
-            return callback.call(thisArg, data);
+            return callback.call(thisArg, ...args);
         } catch (error) {
             console.error(`执行调用事件 ${type} 的回调时出错:`, error);
             throw error;
@@ -206,7 +207,84 @@ class sMsgBus {
         };
     }
 
+
+    // 提供一个动态加载模块的方法
+    _moduleLoaderInit() {
+        this._moduleCache = new Map();  // 用于缓存已加载的模块
+        this._exportCache = new Map();  // 用于缓存模块的导出对象
+    }
+
+    async loadModule(moduleSpec) {
+        if (typeof moduleSpec === 'string') {
+            return this._loadAndCache(moduleSpec);
+        }
+        // 批量模块
+        else if (Array.isArray(moduleSpec)) {
+            const results = [];
+            for (const path of moduleSpec) {
+                try {
+                    const module = await this._loadAndCache(path);
+                    results.push({ path, success: true, module });
+                } catch (error) {
+                    results.push({ path, success: false, error: error.message });
+                }
+            }
+            return results;
+        }
+        // 无效参数
+        return null;
+    }
+    async _loadAndCache(modulePath) {
+        // 查重：如果已缓存，直接返回
+        if (this._moduleCache.has(modulePath)) {
+            console.log(`模块已缓存，直接返回: ${modulePath}`);
+            return this._moduleCache.get(modulePath);
+        }
+
+        console.log(`加载新模块: ${modulePath}`);
+
+        // 动态导入
+        const module = await import(modulePath);
+
+        // 缓存模块
+        this._moduleCache.set(modulePath, module);
+
+        // 缓存默认导出实例（如果是对象或实例）
+        if (module.default) {
+            const moduleName = this._extractModuleName(modulePath);
+            this._exportCache.set(moduleName, module.default);
+        }
+
+        return module;
+    }
+    _extractModuleName(path) {
+        // 处理各种路径格式
+        // 1. 将Windows反斜杠转换为正斜杠
+        const normalized = path.replace(/\\/g, '/');
+
+        // 2. 获取文件名（最后一个斜杠后的部分）
+        const lastSlashIndex = normalized.lastIndexOf('/');
+        const fileName = lastSlashIndex >= 0
+            ? normalized.substring(lastSlashIndex + 1)
+            : normalized;
+
+        // 3. 移除.js扩展名（如果存在）
+        if (fileName.endsWith('.js')) {
+            return fileName.substring(0, fileName.length - 3);
+        }
+
+        // 4. 移除其他常见扩展名
+        const extensions = ['.mjs', '.cjs', '.ts', '.jsx', '.tsx'];
+        for (const ext of extensions) {
+            if (fileName.endsWith(ext)) {
+                return fileName.substring(0, fileName.length - ext.length);
+            }
+        }
+
+        return fileName;
+    }
 }
 
 // ES模块导出
-export default sMsgBus;
+const s = new sMsgBus();
+export default s;

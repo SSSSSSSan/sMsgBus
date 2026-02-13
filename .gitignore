@@ -7,7 +7,6 @@ yarn-error.log*
 # Build outputs
 dist/
 dist.bak/
-test-local/
 lib/
 es/
 coverage/
@@ -37,5 +36,3 @@ logs/
 tmp/
 temp/
 
-# Test files and folders
-test-local/

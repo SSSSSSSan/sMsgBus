@@ -48,6 +48,7 @@ bus.call('getData').then(result => {
 - `callSync(type, data)` - 同步调用
 - `offCall(type, callback, thisArg)` - 取消注册调用事件
 - `check(type)` - 检查事件注册状态
+- `_moduleLoaderInit(path|pathArray)` - 动态加载模块
 
 ## 编译文件
 

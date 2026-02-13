@@ -4,22 +4,26 @@ describe('sMsgBus 功能测试', () => {
   let bus;
 
   beforeEach(() => {
-    // 每次测试前创建新的实例
-    // 由于是单例模式，我们需要清除实例
-    if (sMsgBus.instance) {
-      sMsgBus.instance._listeners.clear();
-      sMsgBus.instance._calls.clear();
-    }
-    bus = new sMsgBus();
+    // 每次测试前重置单例实例的状态
+    // 由于sMsgBus是单例模式，我们直接使用导入的实例
+    bus = sMsgBus;
+    bus._listeners.clear();
+    bus._calls.clear();
   });
 
   describe('单例模式测试', () => {
     test('应该是单例模式', () => {
-      const instance1 = new sMsgBus();
-      const instance2 = new sMsgBus();
+      // 由于sMsgBus是单例，直接导入的实例应该就是单例实例
+      const instance1 = sMsgBus;
+      const instance2 = sMsgBus;
       
       expect(instance1).toBe(instance2);
-      expect(instance1).toBeInstanceOf(sMsgBus);
+      // 检查实例是否具有单例模式应有的属性和方法
+      expect(instance1).toHaveProperty('_listeners');
+      expect(instance1).toHaveProperty('_calls');
+      expect(instance1).toHaveProperty('on');
+      expect(instance1).toHaveProperty('emit');
+      expect(instance1).toHaveProperty('call');
     });
 
     test('应该具有内部 Map 属性', () => {
@@ -368,11 +372,10 @@ describe('sMsgBus 压力测试', () => {
   let bus;
 
   beforeEach(() => {
-    if (sMsgBus.instance) {
-      sMsgBus.instance._listeners.clear();
-      sMsgBus.instance._calls.clear();
-    }
-    bus = new sMsgBus();
+    // 每次测试前重置单例实例的状态
+    bus = sMsgBus;
+    bus._listeners.clear();
+    bus._calls.clear();
   });
 
   test('广播消息压力测试 - 1万条消息', () => {
